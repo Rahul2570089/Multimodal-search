@@ -14,6 +14,15 @@ async def lifespan(app: FastAPI):
     # Startup
     await init_db()
     init_chroma()
+    
+    # Initialize RAG chain (this will load the embedding model)
+    try:
+        from services.rag_chain import get_rag_chain
+        rag_chain = get_rag_chain()
+        print("✅ RAG chain initialized successfully")
+    except Exception as e:
+        print(f"❌ Failed to initialize RAG chain: {e}")
+    
     yield
     # Shutdown
     pass

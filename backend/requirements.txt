@@ -10,8 +10,12 @@ alembic==1.12.1
 # Vector Database & AI
 chromadb==0.4.15
 langchain==0.0.340
+langchain-community==0.0.6
+langchain-openai==0.0.2
 sentence-transformers==2.2.2
 open-clip-torch==2.20.0
+tiktoken==0.5.2
+faiss-cpu==1.7.4
 
 # Image Processing
 pillow==10.1.0

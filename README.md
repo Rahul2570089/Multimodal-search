@@ -2,6 +2,26 @@
 
 An AI-powered e-commerce search system that understands both text and images, using advanced RAG techniques for semantic understanding.
 
+## Weekend Implementation Plan
+
+### Weekend 1: Foundation (Completed)
+- [x] Project structure setup
+- [x] Docker Compose environment
+- [x] FastAPI backend
+- [x] PostgreSQL schema
+- [x] Basic CRUD APIs
+- [x] ChromaDB setup
+- [x] Sample data creation
+
+### Weekend 2: Text Search with RAG (Completed)
+- [x] LangChain integration
+- [x] Text embedding pipeline
+- [x] Semantic search implementation
+- [x] RAG retrieval chain
+- [x] Document chunking for product descriptions
+- [x] Query expansion and understanding
+- [x] Advanced search analytics
+
 ## Project Overview
 
 This project demonstrates:
@@ -61,6 +81,16 @@ docker-compose exec api python scripts/create_sample_data.py
 docker-compose exec api python scripts/setup_chroma.py
 ```
 
+5. **Generate embeddings for semantic search**
+```bash
+docker-compose exec api python scripts/generate_embeddings.py
+```
+
+6. **Test semantic search**
+```bash
+docker-compose exec api python scripts/test_semantic_search.py
+```
+
 ### Access Points
 
 - **API Documentation**: http://localhost:8000/docs
@@ -78,51 +108,11 @@ docker-compose exec api python scripts/setup_chroma.py
 - `DELETE /api/products/{id}` - Delete product
 
 ### Search
-- `POST /api/search/text` - Text-based search
-- `POST /api/search/image` - Image-based search
+- `POST /api/search/text` - Text-based search with RAG enhancement
+- `POST /api/search/image` - Image-based search (placeholder)
 - `POST /api/search/multimodal` - Combined text + image search
+- `POST /api/search/understand` - Query understanding and expansion
 - `GET /api/search/analytics` - Search analytics
-
-## Weekend Implementation Plan
-
-### ✅ Weekend 1: Foundation (Completed)
-- [x] Project structure setup
-- [x] Docker Compose environment
-- [x] FastAPI backend
-- [x] PostgreSQL schema
-- [x] Basic CRUD APIs
-- [x] ChromaDB setup
-- [x] Sample data creation
-
-### 📅 Weekend 2: Text Search with RAG
-- [ ] LangChain integration
-- [ ] Text embedding pipeline
-- [ ] Semantic search implementation
-- [ ] RAG retrieval chain
-
-### 📅 Weekend 3: Image Processing
-- [ ] OpenCLIP integration
-- [ ] Image embedding generation
-- [ ] Image similarity search
-- [ ] Visual search capabilities
-
-### 📅 Weekend 4: Multi-modal Fusion
-- [ ] Text + image fusion algorithms
-- [ ] Hybrid ranking system
-- [ ] Cross-modal search
-- [ ] Query weighting
-
-### 📅 Weekend 5: Advanced Features
-- [ ] Query understanding
-- [ ] Faceted search
-- [ ] Performance optimization
-- [ ] Search analytics
-
-### 📅 Weekend 6: Production Ready
-- [ ] Horizontal scaling
-- [ ] Monitoring setup
-- [ ] Load testing
-- [ ] Documentation
 
 ## Project Structure
 
@@ -166,15 +156,3 @@ docker-compose exec api alembic upgrade head
 - **Throughput**: 1000+ queries/second
 - **Scalability**: 100K+ products, 10K+ concurrent users
 - **Accuracy**: 85%+ relevance score
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
