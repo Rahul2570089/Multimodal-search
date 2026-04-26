@@ -20,6 +20,9 @@ faiss-cpu==1.7.4
 # Image Processing
 pillow==10.1.0
 opencv-python==4.8.1.78
+torchvision==0.16.0
+transformers==4.36.0
+timm==0.9.7
 
 # Data Processing
 pandas==2.1.3

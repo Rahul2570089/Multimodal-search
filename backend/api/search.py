@@ -139,13 +139,68 @@ async def search_image(
     start_time = time.time()
     
     try:
-        # For now, return random products as placeholder
-        # This will be enhanced with image embeddings in Weekend 3
+        from services.visual_search import get_visual_search_service
+        from services.image_embeddings import get_image_embedding_service
         from models.product import Product
-        import random
         
-        products = db.query(Product).limit(limit).all()
-        random.shuffle(products)
+        # Process uploaded image
+        visual_search_service = get_visual_search_service()
+        image_embedding_service = get_image_embedding_service()
+        
+        # Read and validate image
+        file_content = await image.read()
+        
+        # Generate image embedding
+        image_embedding = image_embedding_service.embed_image(file_content)
+        
+        # Build filters
+        filters = {}
+        if category:
+            filters['category'] = category
+        
+        # Perform visual search
+        visual_results = visual_search_service.search_by_image(
+            image_embedding, k=limit*2, filters=filters
+        )
+        
+        # Convert to Product objects
+        product_ids = []
+        for result in visual_results:
+            product_id = result.get('product_id')
+            if product_id and product_id not in product_ids:
+                product_ids.append(product_id)
+        
+        # Get full product details
+        products = []
+        if product_ids:
+            products = db.query(Product).filter(Product.id.in_(product_ids)).all()
+            
+            # Order by visual search results
+            product_dict = {p.id: p for p in products}
+            ordered_products = []
+            for result in visual_results:
+                product_id = result.get('product_id')
+                if product_id in product_dict:
+                    product = product_dict[product_id]
+                    # Add similarity score to product
+                    product.similarity_score = result.get('similarity_score', 0)
+                    ordered_products.append(product)
+            
+            products = ordered_products
+        
+        # Apply price filters
+        if min_price is not None or max_price is not None:
+            filtered_products = []
+            for product in products:
+                if min_price is not None and product.price < min_price:
+                    continue
+                if max_price is not None and product.price > max_price:
+                    continue
+                filtered_products.append(product)
+            products = filtered_products
+        
+        # Limit results
+        products = products[:limit]
         
         response_time = int((time.time() - start_time) * 1000)
         
@@ -166,7 +221,9 @@ async def search_image(
             "query": f"image_search_{image.filename}",
             "results": products,
             "total": len(products),
-            "response_time_ms": response_time
+            "response_time_ms": response_time,
+            "search_type": "visual",
+            "visual_results": visual_results[:len(products)]
         }
         
     except Exception as e:
@@ -181,47 +238,150 @@ async def search_multimodal(
     min_price: Optional[float] = Form(None),
     max_price: Optional[float] = Form(None),
     limit: int = Form(20),
+    image_weight: float = Form(0.7),
+    fusion_strategy: str = Form("adaptive_fusion"),
+    ranking_context: str = Form("general_search"),
+    enable_advanced_ranking: bool = Form(True),
     db: Session = Depends(get_db)
 ):
-    """Search products using both text and image"""
+    """Advanced multimodal search with fusion and ranking"""
     start_time = time.time()
     
     if not query and not image:
         raise HTTPException(status_code=400, detail="Either query or image must be provided")
     
     try:
-        # For now, combine basic text and image search
-        # This will be enhanced with proper multimodal fusion in Weekend 4
+        from services.multimodal_fusion import get_multimodal_fusion_service, FusionStrategy
+        from services.cross_modal_retrieval import get_cross_modal_retrieval_service
+        from services.advanced_ranking import get_advanced_ranking_service, RankingContext
+        from services.fusion_analytics import get_fusion_analytics_service
+        from services.image_embeddings import get_image_embedding_service
         from models.product import Product
-        from sqlalchemy import or_
-        import random
         
-        db_query = db.query(Product)
+        # Initialize services
+        fusion_service = get_multimodal_fusion_service()
+        cross_modal_service = get_cross_modal_retrieval_service()
+        ranking_service = get_advanced_ranking_service()
+        analytics_service = get_fusion_analytics_service()
+        image_embedding_service = get_image_embedding_service()
         
-        # Apply text search if provided
-        if query:
-            db_query = db_query.filter(
-                or_(
-                    Product.name.ilike(f"%{query}%"),
-                    Product.description.ilike(f"%{query}%")
-                )
-            )
+        # Parse strategy and context
+        try:
+            strategy = FusionStrategy(fusion_strategy)
+        except ValueError:
+            strategy = FusionStrategy.ADAPTIVE_FUSION
         
-        # Apply filters
+        try:
+            context = RankingContext(ranking_context)
+        except ValueError:
+            context = RankingContext.GENERAL_SEARCH
+        
+        # Build filters
+        filters = {}
         if category:
-            db_query = db_query.filter(Product.category.ilike(f"%{category}%"))
-        if min_price is not None:
-            db_query = db_query.filter(Product.price >= min_price)
-        if max_price is not None:
-            db_query = db_query.filter(Product.price <= max_price)
+            filters['category'] = category
         
-        products = db_query.limit(limit).all()
-        
-        # If image is provided, shuffle results to simulate image influence
+        # Get image embedding if provided
+        image_embedding = None
         if image:
-            random.shuffle(products)
+            file_content = await image.read()
+            image_embedding = image_embedding_service.embed_image(file_content)
+        
+        # Perform fusion search
+        fusion_results = fusion_service.fuse_search_results(
+            text_query=query,
+            image_embedding=image_embedding,
+            filters=filters,
+            strategy=strategy,
+            top_k=limit * 2
+        )
+        
+        # Apply advanced ranking if enabled
+        if enable_advanced_ranking and fusion_results:
+            # Build user context (simplified)
+            user_context = {
+                'preferred_categories': [category] if category else [],
+                'preferred_brands': [],
+                'interaction_history': [],
+                'target_category': category
+            }
+            
+            ranked_results = ranking_service.rank_search_results(
+                fusion_results, context, user_context, limit
+            )
+        else:
+            # Convert fusion results to simple format
+            ranked_results = []
+            for result in fusion_results[:limit]:
+                ranked_results.append({
+                    'product_id': result.product_id,
+                    'name': result.name,
+                    'category': result.category,
+                    'brand': result.brand,
+                    'price': result.price,
+                    'rating': result.rating,
+                    'image_url': result.image_url,
+                    'fusion_score': result.fusion_score,
+                    'confidence': result.confidence,
+                    'strategy_used': result.strategy_used
+                })
+        
+        # Get full product details
+        product_ids = [r['product_id'] for r in ranked_results if 'product_id' in r]
+        products = []
+        if product_ids:
+            db_products = db.query(Product).filter(Product.id.in_(product_ids)).all()
+            product_dict = {p.id: p for p in db_products}
+            
+            for ranked_result in ranked_results:
+                product_id = ranked_result.get('product_id')
+                if product_id in product_dict:
+                    product = product_dict[product_id]
+                    
+                    # Add ranking information
+                    if 'fusion_score' in ranked_result:
+                        product.fusion_score = ranked_result['fusion_score']
+                    if 'confidence' in ranked_result:
+                        product.confidence = ranked_result['confidence']
+                    if 'strategy_used' in ranked_result:
+                        product.strategy_used = ranked_result['strategy_used']
+                    if 'final_score' in ranked_result:
+                        product.final_score = ranked_result['final_score']
+                    if 'rank_position' in ranked_result:
+                        product.rank_position = ranked_result['rank_position']
+                    
+                    products.append(product)
+        
+        # Apply price filters
+        if min_price is not None or max_price is not None:
+            filtered_products = []
+            for product in products:
+                if min_price is not None and product.price < min_price:
+                    continue
+                if max_price is not None and product.price > max_price:
+                    continue
+                filtered_products.append(product)
+            products = filtered_products
+        
+        # Limit results
+        products = products[:limit]
         
         response_time = int((time.time() - start_time) * 1000)
+        
+        # Record analytics
+        if fusion_results:
+            avg_fusion_score = sum(r.fusion_score for r in fusion_results) / len(fusion_results)
+            avg_confidence = sum(r.confidence for r in fusion_results) / len(fusion_results)
+            
+            analytics_service.record_fusion_metric(
+                strategy=strategy.value,
+                execution_time_ms=response_time,
+                fusion_score=avg_fusion_score,
+                confidence=avg_confidence,
+                result_count=len(products),
+                text_available=query is not None,
+                image_available=image_embedding is not None
+            )
         
         # Log search
         search_query = f"multimodal_{query or 'no_text'}_{image.filename if image else 'no_image'}"
@@ -237,15 +397,31 @@ async def search_multimodal(
         db.add(db_search_log)
         db.commit()
         
-        return {
+        # Prepare response
+        response_data = {
             "query": search_query,
             "results": products,
             "total": len(products),
-            "response_time_ms": response_time
+            "response_time_ms": response_time,
+            "search_type": "advanced_multimodal",
+            "fusion_strategy": strategy.value,
+            "ranking_context": context.value,
+            "advanced_ranking_enabled": enable_advanced_ranking,
+            "image_weight": image_weight if image else 0
         }
         
+        # Add fusion analytics if available
+        if fusion_results:
+            response_data["fusion_analytics"] = {
+                "avg_fusion_score": avg_fusion_score,
+                "avg_confidence": avg_confidence,
+                "strategy_distribution": fusion_service.get_fusion_analytics()
+            }
+        
+        return response_data
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Multimodal search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Advanced multimodal search failed: {str(e)}")
 
 
 @router.post("/understand")
@@ -322,6 +498,207 @@ def _generate_query_suggestions(intent: dict, original_query: str) -> List[str]:
         ])
     
     return list(set(suggestions))[:5]  # Remove duplicates and limit to 5
+
+
+@router.post("/cross-modal/text-to-image")
+async def text_to_image_search(
+    query: str = Form(...),
+    category: Optional[str] = Form(None),
+    limit: int = Form(10),
+    db: Session = Depends(get_db)
+):
+    """Cross-modal search from text to images"""
+    start_time = time.time()
+    
+    try:
+        from services.cross_modal_retrieval import get_cross_modal_retrieval_service
+        from services.fusion_analytics import get_fusion_analytics_service
+        from models.product import Product
+        
+        cross_modal_service = get_cross_modal_retrieval_service()
+        analytics_service = get_fusion_analytics_service()
+        
+        # Perform cross-modal search
+        result = cross_modal_service.text_to_image_retrieval(query, limit)
+        
+        # Convert to Product objects
+        product_ids = [item['product_id'] for item in result.retrieved_items]
+        products = []
+        if product_ids:
+            db_products = db.query(Product).filter(Product.id.in_(product_ids)).all()
+            product_dict = {p.id: p for p in db_products}
+            
+            for item in result.retrieved_items:
+                product_id = item['product_id']
+                if product_id in product_dict:
+                    product = product_dict[product_id]
+                    product.cross_modal_score = item['cross_modal_score']
+                    products.append(product)
+        
+        response_time = int((time.time() - start_time) * 1000)
+        
+        # Record analytics
+        analytics_service.record_cross_modal_metric(
+            query_type='text_to_image',
+            execution_time_ms=response_time,
+            cross_modal_score=result.cross_modal_score,
+            confidence=result.confidence,
+            result_count=len(products)
+        )
+        
+        return {
+            "query": query,
+            "results": products,
+            "total": len(products),
+            "response_time_ms": response_time,
+            "cross_modal_score": result.cross_modal_score,
+            "confidence": result.confidence,
+            "explanation": result.explanation
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cross-modal search failed: {str(e)}")
+
+
+@router.post("/cross-modal/image-to-text")
+async def image_to_text_search(
+    image: UploadFile = File(...),
+    limit: int = Form(10),
+    db: Session = Depends(get_db)
+):
+    """Cross-modal search from image to text"""
+    start_time = time.time()
+    
+    try:
+        from services.cross_modal_retrieval import get_cross_modal_retrieval_service
+        from services.fusion_analytics import get_fusion_analytics_service
+        from services.image_embeddings import get_image_embedding_service
+        from models.product import Product
+        
+        cross_modal_service = get_cross_modal_retrieval_service()
+        analytics_service = get_fusion_analytics_service()
+        image_embedding_service = get_image_embedding_service()
+        
+        # Get image embedding
+        file_content = await image.read()
+        image_embedding = image_embedding_service.embed_image(file_content)
+        
+        # Perform cross-modal search
+        result = cross_modal_service.image_to_text_retrieval(image_embedding, limit)
+        
+        # Convert to Product objects
+        product_ids = [item['product_id'] for item in result.retrieved_items]
+        products = []
+        if product_ids:
+            db_products = db.query(Product).filter(Product.id.in_(product_ids)).all()
+            product_dict = {p.id: p for p in db_products}
+            
+            for item in result.retrieved_items:
+                product_id = item['product_id']
+                if product_id in product_dict:
+                    product = product_dict[product_id]
+                    product.cross_modal_score = item['cross_modal_score']
+                    product.generated_query = item['generated_query']
+                    products.append(product)
+        
+        response_time = int((time.time() - start_time) * 1000)
+        
+        # Record analytics
+        analytics_service.record_cross_modal_metric(
+            query_type='image_to_text',
+            execution_time_ms=response_time,
+            cross_modal_score=result.cross_modal_score,
+            confidence=result.confidence,
+            result_count=len(products)
+        )
+        
+        return {
+            "query": f"image_search_{image.filename}",
+            "results": products,
+            "total": len(products),
+            "response_time_ms": response_time,
+            "cross_modal_score": result.cross_modal_score,
+            "confidence": result.confidence,
+            "explanation": result.explanation
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cross-modal search failed: {str(e)}")
+
+
+@router.get("/fusion/analytics")
+async def get_fusion_analytics(time_range_hours: int = 24):
+    """Get fusion analytics and performance metrics"""
+    try:
+        from services.fusion_analytics import get_fusion_analytics_service
+        
+        analytics_service = get_fusion_analytics_service()
+        analytics = analytics_service.get_fusion_analytics(time_range_hours)
+        
+        return analytics
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fusion analytics failed: {str(e)}")
+
+
+@router.get("/fusion/comprehensive")
+async def get_comprehensive_analytics(time_range_hours: int = 24):
+    """Get comprehensive analytics across all services"""
+    try:
+        from services.fusion_analytics import get_fusion_analytics_service
+        
+        analytics_service = get_fusion_analytics_service()
+        analytics = analytics_service.get_comprehensive_analytics(time_range_hours)
+        
+        return analytics
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Comprehensive analytics failed: {str(e)}")
+
+
+@router.get("/performance/cache-stats")
+async def get_cache_stats():
+    """Get cache performance statistics"""
+    try:
+        from services.performance_optimizer import get_performance_optimizer
+        
+        optimizer = get_performance_optimizer()
+        cache_stats = optimizer.get_cache_stats()
+        
+        return cache_stats
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cache stats failed: {str(e)}")
+
+
+@router.get("/performance/metrics")
+async def get_performance_metrics():
+    """Get performance metrics"""
+    try:
+        from services.performance_optimizer import get_performance_optimizer
+        
+        optimizer = get_performance_optimizer()
+        perf_stats = optimizer.get_performance_stats()
+        
+        return perf_stats
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Performance metrics failed: {str(e)}")
+
+
+@router.post("/performance/cache/clear")
+async def clear_cache():
+    """Clear performance cache"""
+    try:
+        from services.performance_optimizer import get_performance_optimizer
+        
+        optimizer = get_performance_optimizer()
+        optimizer.clear_cache()
+        
+        return {"message": "Cache cleared successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cache clear failed: {str(e)}")
 
 
 @router.get("/analytics")

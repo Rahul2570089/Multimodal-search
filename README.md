@@ -22,6 +22,24 @@ An AI-powered e-commerce search system that understands both text and images, us
 - [x] Query expansion and understanding
 - [x] Advanced search analytics
 
+### Weekend 3: Image Processing & Visual Search (Completed)
+- [x] OpenCLIP integration for image embeddings
+- [x] Image upload and processing service
+- [x] Image similarity search functionality
+- [x] Visual search API endpoint
+- [x] Hybrid visual + text search
+- [x] Image embeddings for existing products
+- [x] Visual search testing suite
+
+### Weekend 4: Advanced Multimodal Fusion (Completed)
+- [x] Sophisticated multimodal fusion algorithms
+- [x] Cross-modal retrieval (text-to-image, image-to-text)
+- [x] Advanced ranking with contextual understanding
+- [x] Performance optimization and caching
+- [x] Fusion analytics and performance metrics
+- [x] Enhanced multimodal search API
+- [x] Advanced multimodal testing suite
+
 ## Project Overview
 
 This project demonstrates:
@@ -86,9 +104,24 @@ docker-compose exec api python scripts/setup_chroma.py
 docker-compose exec api python scripts/generate_embeddings.py
 ```
 
-6. **Test semantic search**
+7. **Generate image embeddings for visual search**
+```bash
+docker-compose exec api python scripts/generate_image_embeddings.py
+```
+
+8. **Test semantic search**
 ```bash
 docker-compose exec api python scripts/test_semantic_search.py
+```
+
+9. **Test visual search**
+```bash
+docker-compose exec api python scripts/test_visual_search.py
+```
+
+10. **Test advanced multimodal fusion**
+```bash
+docker-compose exec api python scripts/test_advanced_multimodal.py
 ```
 
 ### Access Points
@@ -109,10 +142,17 @@ docker-compose exec api python scripts/test_semantic_search.py
 
 ### Search
 - `POST /api/search/text` - Text-based search with RAG enhancement
-- `POST /api/search/image` - Image-based search (placeholder)
-- `POST /api/search/multimodal` - Combined text + image search
+- `POST /api/search/image` - Image-based search with visual similarity
+- `POST /api/search/multimodal` - Advanced multimodal search with fusion
 - `POST /api/search/understand` - Query understanding and expansion
+- `POST /api/search/cross-modal/text-to-image` - Text-to-image cross-modal search
+- `POST /api/search/cross-modal/image-to-text` - Image-to-text cross-modal search
 - `GET /api/search/analytics` - Search analytics
+- `GET /api/search/fusion/analytics` - Fusion performance analytics
+- `GET /api/search/fusion/comprehensive` - Comprehensive system analytics
+- `GET /api/search/performance/metrics` - Performance metrics
+- `GET /api/search/performance/cache-stats` - Cache statistics
+- `POST /api/search/performance/cache/clear` - Clear performance cache
 
 ## Project Structure
 
